@@ -1,0 +1,736 @@
+// Prisma Schema for Reputation Management Software
+// Multi-tenant structure supporting agencies and their clients
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// TENANT & USER MANAGEMENT
+// ============================================
+
+model Agency {
+  id              String    @id @default(uuid())
+  name            String
+  slug            String    @unique
+  email           String    @unique
+  phone           String?
+  website         String?
+  logoUrl         String?
+  plan            PlanType  @default(STARTER)
+  planExpiresAt   DateTime?
+  isActive        Boolean   @default(true)
+  settings        Json      @default("{}")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  users           User[]
+  clients         Client[]
+  apiKeys         ApiKey[]
+
+  @@index([slug])
+  @@index([email])
+}
+
+model Client {
+  id              String    @id @default(uuid())
+  agencyId        String
+  name            String
+  slug            String
+  email           String
+  phone           String?
+  industry        String?
+  isActive        Boolean   @default(true)
+  settings        Json      @default("{}")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  agency          Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  users           User[]
+  businessProfiles BusinessProfile[]
+  customers       Customer[]
+  campaigns       Campaign[]
+  reviews         Review[]
+  directoryListings DirectoryListing[]
+
+  @@unique([agencyId, slug])
+  @@index([agencyId])
+}
+
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  passwordHash    String
+  firstName       String
+  lastName        String
+  phone           String?
+  role            UserRole  @default(CLIENT_USER)
+  avatarUrl       String?
+  isActive        Boolean   @default(true)
+  emailVerified   Boolean   @default(false)
+  lastLoginAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  agencyId        String?
+  clientId        String?
+
+  agency          Agency?   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  client          Client?   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  refreshTokens   RefreshToken[]
+  auditLogs       AuditLog[]
+  reviewResponses ReviewResponse[]
+
+  @@index([email])
+  @@index([agencyId])
+  @@index([clientId])
+}
+
+model RefreshToken {
+  id          String    @id @default(uuid())
+  userId      String
+  token       String    @unique
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
+model ApiKey {
+  id          String    @id @default(uuid())
+  agencyId    String
+  name        String
+  keyHash     String    @unique
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  agency      Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@index([keyHash])
+  @@index([agencyId])
+}
+
+// ============================================
+// BUSINESS PROFILE & LOCAL SEO
+// ============================================
+
+model BusinessProfile {
+  id                  String    @id @default(uuid())
+  clientId            String
+  googlePlaceId       String?   @unique
+  googleAccountId     String?
+  googleLocationId    String?
+  googleAccessToken   String?
+  googleRefreshToken  String?
+  tokenExpiresAt      DateTime?
+
+  name                String
+  address             String?
+  city                String?
+  state               String?
+  zipCode             String?
+  country             String?
+  phone               String?
+  website             String?
+  email               String?
+  description         String?
+
+  primaryCategory     String?
+  categories          String[]  @default([])
+
+  mondayHours         String?
+  tuesdayHours        String?
+  wednesdayHours      String?
+  thursdayHours       String?
+  fridayHours         String?
+  saturdayHours       String?
+  sundayHours         String?
+  specialHours        Json?
+
+  logoUrl             String?
+  coverPhotoUrl       String?
+  photos              String[]  @default([])
+
+  attributes          Json?
+  serviceArea         Json?
+
+  averageRating       Float?
+  totalReviews        Int       @default(0)
+
+  lastSyncedAt        DateTime?
+  isVerified          Boolean   @default(false)
+  isActive            Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  client              Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  reviews             Review[]
+  directoryListings   DirectoryListing[]
+  reviewLinks         ReviewLink[]
+
+  @@index([clientId])
+  @@index([googlePlaceId])
+}
+
+model DirectoryListing {
+  id                  String    @id @default(uuid())
+  clientId            String
+  businessProfileId   String
+  directory           DirectoryType
+  externalId          String?
+  listingUrl          String?
+
+  name                String?
+  address             String?
+  phone               String?
+  website             String?
+
+  syncStatus          SyncStatus @default(PENDING)
+  lastSyncedAt        DateTime?
+  lastError           String?
+
+  isActive            Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  client              Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  businessProfile     BusinessProfile @relation(fields: [businessProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([businessProfileId, directory])
+  @@index([clientId])
+  @@index([businessProfileId])
+}
+
+model ReviewLink {
+  id                  String    @id @default(uuid())
+  businessProfileId   String
+  platform            String    @default("google")
+  shortUrl            String?
+  fullUrl             String
+  qrCodeUrl           String?
+  clickCount          Int       @default(0)
+  isActive            Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  businessProfile     BusinessProfile @relation(fields: [businessProfileId], references: [id], onDelete: Cascade)
+
+  @@index([businessProfileId])
+  @@index([shortUrl])
+}
+
+// ============================================
+// CUSTOMER DATA
+// ============================================
+
+model Customer {
+  id              String    @id @default(uuid())
+  clientId        String
+  externalId      String?
+
+  firstName       String
+  lastName        String?
+  email           String?
+  phone           String?
+
+  tags            String[]  @default([])
+  metadata        Json?
+
+  optOutEmail     Boolean   @default(false)
+  optOutSms       Boolean   @default(false)
+
+  lastVisitAt     DateTime?
+  totalVisits     Int       @default(1)
+
+  source          CustomerSource @default(MANUAL)
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  client          Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  campaignRecipients CampaignRecipient[]
+
+  @@unique([clientId, email])
+  @@unique([clientId, phone])
+  @@index([clientId])
+  @@index([email])
+  @@index([phone])
+}
+
+model CustomerImport {
+  id              String    @id @default(uuid())
+  clientId        String
+  fileName        String
+  totalRows       Int       @default(0)
+  processedRows   Int       @default(0)
+  successCount    Int       @default(0)
+  errorCount      Int       @default(0)
+  duplicateCount  Int       @default(0)
+  status          ImportStatus @default(PENDING)
+  errorLog        Json?
+  createdAt       DateTime  @default(now())
+  completedAt     DateTime?
+
+  @@index([clientId])
+}
+
+// ============================================
+// CAMPAIGNS & MESSAGING
+// ============================================
+
+model Campaign {
+  id                  String    @id @default(uuid())
+  clientId            String
+  name                String
+  description         String?
+  type                CampaignType
+  status              CampaignStatus @default(DRAFT)
+
+  emailEnabled        Boolean   @default(true)
+  smsEnabled          Boolean   @default(false)
+
+  emailSubject        String?
+  emailTemplate       String?
+  smsTemplate         String?
+
+  scheduleType        ScheduleType @default(IMMEDIATE)
+  scheduledAt         DateTime?
+  delayHours          Int?
+
+  // Drip campaign settings
+  dripEnabled         Boolean   @default(false)
+  dripIntervalDays    Int?
+  dripMaxMessages     Int?
+
+  totalRecipients     Int       @default(0)
+  sentCount           Int       @default(0)
+  deliveredCount      Int       @default(0)
+  openedCount         Int       @default(0)
+  clickedCount        Int       @default(0)
+  reviewCount         Int       @default(0)
+
+  startedAt           DateTime?
+  completedAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  client              Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  recipients          CampaignRecipient[]
+  messages            CampaignMessage[]
+
+  @@index([clientId])
+  @@index([status])
+}
+
+model CampaignRecipient {
+  id              String    @id @default(uuid())
+  campaignId      String
+  customerId      String
+
+  emailStatus     MessageStatus @default(PENDING)
+  smsStatus       MessageStatus @default(PENDING)
+
+  emailSentAt     DateTime?
+  smsSentAt       DateTime?
+  emailOpenedAt   DateTime?
+  linkClickedAt   DateTime?
+  reviewLeftAt    DateTime?
+
+  dripStep        Int       @default(1)
+  nextDripAt      DateTime?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  campaign        Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  customer        Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, customerId])
+  @@index([campaignId])
+  @@index([customerId])
+}
+
+model CampaignMessage {
+  id              String    @id @default(uuid())
+  campaignId      String
+  recipientId     String?
+  type            MessageType
+
+  toAddress       String
+  fromAddress     String?
+  subject         String?
+  body            String
+
+  status          MessageStatus @default(PENDING)
+  externalId      String?
+
+  sentAt          DateTime?
+  deliveredAt     DateTime?
+  openedAt        DateTime?
+  clickedAt       DateTime?
+  failedAt        DateTime?
+  errorMessage    String?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  campaign        Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([status])
+  @@index([externalId])
+}
+
+// ============================================
+// REVIEWS & RESPONSES
+// ============================================
+
+model Review {
+  id                  String    @id @default(uuid())
+  clientId            String
+  businessProfileId   String
+
+  platform            String    @default("google")
+  externalId          String    @unique
+
+  reviewerName        String?
+  reviewerPhotoUrl    String?
+  reviewerProfileUrl  String?
+
+  rating              Int
+  comment             String?
+
+  sentiment           Sentiment?
+  sentimentScore      Float?
+  keywords            String[]  @default([])
+
+  needsResponse       Boolean   @default(true)
+  isResponded         Boolean   @default(false)
+  isFlagged           Boolean   @default(false)
+  flagReason          String?
+
+  publishedAt         DateTime
+  fetchedAt           DateTime  @default(now())
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  client              Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  businessProfile     BusinessProfile @relation(fields: [businessProfileId], references: [id], onDelete: Cascade)
+  responses           ReviewResponse[]
+  aiSuggestions       ReviewAiSuggestion[]
+
+  @@index([clientId])
+  @@index([businessProfileId])
+  @@index([rating])
+  @@index([publishedAt])
+  @@index([needsResponse])
+}
+
+model ReviewResponse {
+  id              String    @id @default(uuid())
+  reviewId        String
+  userId          String?
+
+  content         String
+  isPublished     Boolean   @default(false)
+  publishedAt     DateTime?
+
+  source          ResponseSource @default(MANUAL)
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  review          Review    @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  user            User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([reviewId])
+}
+
+model ReviewAiSuggestion {
+  id              String    @id @default(uuid())
+  reviewId        String
+
+  tone            ResponseTone
+  content         String
+  confidence      Float?
+
+  isSelected      Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+
+  review          Review    @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@index([reviewId])
+}
+
+// ============================================
+// ANALYTICS & AUDIT
+// ============================================
+
+model AnalyticsSnapshot {
+  id                  String    @id @default(uuid())
+  clientId            String
+  date                DateTime  @db.Date
+
+  totalReviews        Int       @default(0)
+  newReviews          Int       @default(0)
+  averageRating       Float?
+
+  fiveStarCount       Int       @default(0)
+  fourStarCount       Int       @default(0)
+  threeStarCount      Int       @default(0)
+  twoStarCount        Int       @default(0)
+  oneStarCount        Int       @default(0)
+
+  requestsSent        Int       @default(0)
+  requestsDelivered   Int       @default(0)
+  requestsOpened      Int       @default(0)
+  requestsClicked     Int       @default(0)
+
+  responseRate        Float?
+  sentimentScore      Float?
+
+  createdAt           DateTime  @default(now())
+
+  @@unique([clientId, date])
+  @@index([clientId])
+  @@index([date])
+}
+
+model AuditLog {
+  id              String    @id @default(uuid())
+  userId          String?
+  agencyId        String?
+  clientId        String?
+
+  action          String
+  entityType      String
+  entityId        String?
+
+  oldValues       Json?
+  newValues       Json?
+  ipAddress       String?
+  userAgent       String?
+
+  createdAt       DateTime  @default(now())
+
+  user            User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([agencyId])
+  @@index([clientId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+// ============================================
+// FUTURE FEATURES HOOKS
+// ============================================
+
+model ReviewDispute {
+  id              String    @id @default(uuid())
+  reviewId        String
+  reason          DisputeReason
+  description     String?
+  status          DisputeStatus @default(PENDING)
+  submittedAt     DateTime?
+  resolvedAt      DateTime?
+  resolution      String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([reviewId])
+  @@index([status])
+}
+
+model CompetitorProfile {
+  id              String    @id @default(uuid())
+  clientId        String
+  googlePlaceId   String
+  name            String
+  address         String?
+  averageRating   Float?
+  totalReviews    Int       @default(0)
+  lastAnalyzedAt  DateTime?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([clientId])
+  @@index([googlePlaceId])
+}
+
+model ReputationAlert {
+  id              String    @id @default(uuid())
+  clientId        String
+  type            AlertType
+  severity        AlertSeverity @default(MEDIUM)
+  title           String
+  description     String?
+  isRead          Boolean   @default(false)
+  isResolved      Boolean   @default(false)
+  resolvedAt      DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@index([clientId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum PlanType {
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  AGENCY_OWNER
+  AGENCY_ADMIN
+  AGENCY_USER
+  CLIENT_ADMIN
+  CLIENT_USER
+}
+
+enum DirectoryType {
+  GOOGLE
+  YELP
+  BING
+  APPLE_MAPS
+  FACEBOOK
+  HEALTHGRADES
+  ZOCDOC
+  TRIPADVISOR
+  BBB
+  YELLOWPAGES
+  FOURSQUARE
+}
+
+enum SyncStatus {
+  PENDING
+  SYNCING
+  SYNCED
+  ERROR
+  NOT_APPLICABLE
+}
+
+enum CustomerSource {
+  MANUAL
+  CSV_IMPORT
+  API_SYNC
+  FORM_SUBMISSION
+  POS_INTEGRATION
+}
+
+enum ImportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum CampaignType {
+  REVIEW_REQUEST
+  FOLLOW_UP
+  THANK_YOU
+  PROMOTIONAL
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum ScheduleType {
+  IMMEDIATE
+  SCHEDULED
+  DELAYED
+  DRIP
+}
+
+enum MessageType {
+  EMAIL
+  SMS
+}
+
+enum MessageStatus {
+  PENDING
+  QUEUED
+  SENT
+  DELIVERED
+  OPENED
+  CLICKED
+  FAILED
+  BOUNCED
+  UNSUBSCRIBED
+}
+
+enum Sentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+enum ResponseSource {
+  MANUAL
+  AI_GENERATED
+  TEMPLATE
+}
+
+enum ResponseTone {
+  PROFESSIONAL
+  FRIENDLY
+  APOLOGETIC
+  GRATEFUL
+}
+
+enum DisputeReason {
+  FAKE_REVIEW
+  COMPETITOR_ATTACK
+  INAPPROPRIATE_CONTENT
+  WRONG_BUSINESS
+  SPAM
+  OTHER
+}
+
+enum DisputeStatus {
+  PENDING
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum AlertType {
+  NEGATIVE_REVIEW
+  RATING_DROP
+  LISTING_ISSUE
+  COMPETITOR_ACTIVITY
+  CAMPAIGN_COMPLETE
+  SYNC_ERROR
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
