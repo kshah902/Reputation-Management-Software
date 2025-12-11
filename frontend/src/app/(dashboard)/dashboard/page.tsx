@@ -1,11 +1,12 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 import { Header } from '@/components/layout/header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api';
 import { formatNumber, getRatingColor } from '@/lib/utils';
+import { useClientStore } from '@/store/client';
 import {
   Star,
   Users,
@@ -16,13 +17,8 @@ import {
 } from 'lucide-react';
 
 export default function DashboardPage() {
-  const { data: clients } = useQuery({
-    queryKey: ['clients'],
-    queryFn: () => api.getClients(),
-  });
-
-  // For demo purposes, using the first client
-  const clientId = clients?.clients?.[0]?.id;
+  const { selectedClient } = useClientStore();
+  const clientId = selectedClient?.id;
 
   const { data: stats } = useQuery({
     queryKey: ['dashboard-stats', clientId],
@@ -84,6 +80,7 @@ export default function DashboardPage() {
           <h2 className="text-lg font-semibold text-gray-900">Overview</h2>
           <p className="text-sm text-gray-600">
             Your reputation management performance at a glance
+            {selectedClient && <span className="ml-1">for <strong>{selectedClient.name}</strong></span>}
           </p>
         </div>
 
@@ -146,8 +143,8 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                <a
-                  href="/campaigns/new"
+                <Link
+                  href="/campaigns"
                   className="flex items-center gap-3 rounded-lg border p-4 transition-colors hover:bg-gray-50"
                 >
                   <Send className="h-5 w-5 text-purple-600" />
@@ -157,10 +154,10 @@ export default function DashboardPage() {
                       Send review requests to your customers
                     </p>
                   </div>
-                </a>
+                </Link>
 
-                <a
-                  href="/customers/import"
+                <Link
+                  href="/customers"
                   className="flex items-center gap-3 rounded-lg border p-4 transition-colors hover:bg-gray-50"
                 >
                   <Users className="h-5 w-5 text-blue-600" />
@@ -170,10 +167,10 @@ export default function DashboardPage() {
                       Upload a CSV file with customer data
                     </p>
                   </div>
-                </a>
+                </Link>
 
-                <a
-                  href="/reviews?needsResponse=true"
+                <Link
+                  href="/reviews"
                   className="flex items-center gap-3 rounded-lg border p-4 transition-colors hover:bg-gray-50"
                 >
                   <MessageSquare className="h-5 w-5 text-red-600" />
@@ -183,7 +180,7 @@ export default function DashboardPage() {
                       {stats?.needsResponseCount || 0} reviews need your attention
                     </p>
                   </div>
-                </a>
+                </Link>
               </div>
             </CardContent>
           </Card>

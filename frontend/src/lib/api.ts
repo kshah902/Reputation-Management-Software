@@ -110,6 +110,14 @@ class ApiClient {
     return response.data.data.user;
   }
 
+  async changePassword(currentPassword: string, newPassword: string) {
+    const response = await this.client.post<ApiResponse<any>>('/auth/change-password', {
+      currentPassword,
+      newPassword,
+    });
+    return response.data.data;
+  }
+
   // Clients
   async getClients(params?: { search?: string; page?: number; limit?: number }) {
     const response = await this.client.get<ApiResponse<any>>('/clients', { params });
@@ -269,6 +277,150 @@ class ApiClient {
   async syncGoogleReviews(clientId: string, profileId: string) {
     const response = await this.client.post<ApiResponse<any>>(
       `/clients/${clientId}/business-profiles/${profileId}/google/sync`
+    );
+    return response.data.data;
+  }
+
+  async updateBusinessProfile(clientId: string, profileId: string, data: any) {
+    const response = await this.client.put<ApiResponse<any>>(
+      `/clients/${clientId}/business-profiles/${profileId}`,
+      data
+    );
+    return response.data.data.profile;
+  }
+
+  async deleteBusinessProfile(clientId: string, profileId: string) {
+    await this.client.delete(`/clients/${clientId}/business-profiles/${profileId}`);
+  }
+
+  // Business Profile Photos
+  async getBusinessProfilePhotos(clientId: string, profileId: string) {
+    const response = await this.client.get<ApiResponse<any>>(
+      `/clients/${clientId}/business-profiles/${profileId}/photos`
+    );
+    return response.data.data;
+  }
+
+  async addBusinessProfilePhoto(clientId: string, profileId: string, data: any) {
+    const response = await this.client.post<ApiResponse<any>>(
+      `/clients/${clientId}/business-profiles/${profileId}/photos`,
+      data
+    );
+    return response.data.data.photo;
+  }
+
+  async deleteBusinessProfilePhoto(clientId: string, profileId: string, photoId: string) {
+    await this.client.delete(`/clients/${clientId}/business-profiles/${profileId}/photos/${photoId}`);
+  }
+
+  // Business Profile Posts
+  async getBusinessProfilePosts(clientId: string, profileId: string, status?: string) {
+    const params = status ? { status } : {};
+    const response = await this.client.get<ApiResponse<any>>(
+      `/clients/${clientId}/business-profiles/${profileId}/posts`,
+      { params }
+    );
+    return response.data.data.posts;
+  }
+
+  async createBusinessProfilePost(clientId: string, profileId: string, data: any) {
+    const response = await this.client.post<ApiResponse<any>>(
+      `/clients/${clientId}/business-profiles/${profileId}/posts`,
+      data
+    );
+    return response.data.data.post;
+  }
+
+  async updateBusinessProfilePost(clientId: string, profileId: string, postId: string, data: any) {
+    const response = await this.client.put<ApiResponse<any>>(
+      `/clients/${clientId}/business-profiles/${profileId}/posts/${postId}`,
+      data
+    );
+    return response.data.data.post;
+  }
+
+  async deleteBusinessProfilePost(clientId: string, profileId: string, postId: string) {
+    await this.client.delete(`/clients/${clientId}/business-profiles/${profileId}/posts/${postId}`);
+  }
+
+  async publishBusinessProfilePost(clientId: string, profileId: string, postId: string) {
+    const response = await this.client.post<ApiResponse<any>>(
+      `/clients/${clientId}/business-profiles/${profileId}/posts/${postId}/publish`
+    );
+    return response.data.data.post;
+  }
+
+  // Business Profile Hours
+  async updateBusinessProfileHours(clientId: string, profileId: string, data: any) {
+    const response = await this.client.put<ApiResponse<any>>(
+      `/clients/${clientId}/business-profiles/${profileId}/hours`,
+      data
+    );
+    return response.data.data.profile;
+  }
+
+  // Directory Listings
+  async getAvailableDirectories(clientId: string) {
+    const response = await this.client.get<ApiResponse<any>>(
+      `/clients/${clientId}/directories/available`
+    );
+    return response.data.data.directories;
+  }
+
+  async getRecommendedDirectories(clientId: string, industry?: string) {
+    const params = industry ? { industry } : {};
+    const response = await this.client.get<ApiResponse<any>>(
+      `/clients/${clientId}/directories/recommended`,
+      { params }
+    );
+    return response.data.data.recommended;
+  }
+
+  async getDirectoryListings(clientId: string, profileId: string) {
+    const response = await this.client.get<ApiResponse<any>>(
+      `/clients/${clientId}/directories/profiles/${profileId}/listings`
+    );
+    return response.data.data;
+  }
+
+  async createDirectoryListing(clientId: string, profileId: string, data: any) {
+    const response = await this.client.post<ApiResponse<any>>(
+      `/clients/${clientId}/directories/profiles/${profileId}/listings`,
+      data
+    );
+    return response.data.data.listing;
+  }
+
+  async autoCreateDirectoryListings(clientId: string, profileId: string, directoryTypes?: string[]) {
+    const response = await this.client.post<ApiResponse<any>>(
+      `/clients/${clientId}/directories/profiles/${profileId}/listings/auto-create`,
+      { directoryTypes }
+    );
+    return response.data.data;
+  }
+
+  async syncAllDirectoryListings(clientId: string, profileId: string) {
+    const response = await this.client.post<ApiResponse<any>>(
+      `/clients/${clientId}/directories/profiles/${profileId}/sync-all`
+    );
+    return response.data.data;
+  }
+
+  async updateDirectoryListing(clientId: string, listingId: string, data: any) {
+    const response = await this.client.put<ApiResponse<any>>(
+      `/clients/${clientId}/directories/listings/${listingId}`,
+      data
+    );
+    return response.data.data.listing;
+  }
+
+  async deleteDirectoryListing(clientId: string, listingId: string) {
+    await this.client.delete(`/clients/${clientId}/directories/listings/${listingId}`);
+  }
+
+  async checkDirectoryConsistency(clientId: string, listingId: string) {
+    const response = await this.client.post<ApiResponse<any>>(
+      `/clients/${clientId}/directories/listings/${listingId}/check-consistency`
     );
     return response.data.data;
   }

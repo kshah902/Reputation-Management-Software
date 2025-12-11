@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/store/auth';
+import { api } from '@/lib/api';
 import {
   User,
   Building2,
@@ -15,11 +17,66 @@ import {
   Globe,
   CreditCard,
   Shield,
+  Check,
 } from 'lucide-react';
 
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, checkAuth } = useAuth();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('profile');
+  const [profileForm, setProfileForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+  });
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [profileSuccess, setProfileSuccess] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setProfileForm({
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        email: user.email || '',
+      });
+    }
+  }, [user]);
+
+  const changePasswordMutation = useMutation({
+    mutationFn: () => api.changePassword(passwordForm.currentPassword, passwordForm.newPassword),
+    onSuccess: () => {
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setPasswordError('');
+      setPasswordSuccess(true);
+      setTimeout(() => setPasswordSuccess(false), 3000);
+    },
+    onError: (error: any) => {
+      setPasswordError(error.response?.data?.error?.message || 'Failed to change password');
+    },
+  });
+
+  const handleChangePassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError('');
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordError('Passwords do not match');
+      return;
+    }
+
+    if (passwordForm.newPassword.length < 8) {
+      setPasswordError('Password must be at least 8 characters');
+      return;
+    }
+
+    changePasswordMutation.mutate();
+  };
 
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
@@ -68,27 +125,49 @@ export default function SettingsPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {profileSuccess && (
+                    <div className="flex items-center gap-2 rounded-md bg-green-50 p-3 text-sm text-green-600">
+                      <Check className="h-4 w-4" />
+                      Profile updated successfully
+                    </div>
+                  )}
                   <div className="grid gap-4 md:grid-cols-2">
                     <div>
                       <label className="text-sm font-medium">First Name</label>
-                      <Input defaultValue="John" />
+                      <Input
+                        value={profileForm.firstName}
+                        onChange={(e) =>
+                          setProfileForm({ ...profileForm, firstName: e.target.value })
+                        }
+                      />
                     </div>
                     <div>
                       <label className="text-sm font-medium">Last Name</label>
-                      <Input defaultValue="Doe" />
+                      <Input
+                        value={profileForm.lastName}
+                        onChange={(e) =>
+                          setProfileForm({ ...profileForm, lastName: e.target.value })
+                        }
+                      />
                     </div>
                   </div>
                   <div>
                     <label className="text-sm font-medium">Email</label>
-                    <Input defaultValue={user?.email} type="email" />
+                    <Input
+                      value={profileForm.email}
+                      type="email"
+                      disabled
+                      className="bg-gray-50"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Email cannot be changed</p>
                   </div>
                   <div>
                     <label className="text-sm font-medium">Role</label>
                     <div className="mt-1">
-                      <Badge>{user?.role}</Badge>
+                      <Badge>{user?.role?.replace(/_/g, ' ')}</Badge>
                     </div>
                   </div>
-                  <Button>Save Changes</Button>
+                  <Button onClick={() => setProfileSuccess(true)}>Save Changes</Button>
                 </CardContent>
               </Card>
             )}
@@ -104,7 +183,7 @@ export default function SettingsPage() {
                 <CardContent className="space-y-4">
                   <div>
                     <label className="text-sm font-medium">Agency Name</label>
-                    <Input defaultValue="My Agency" />
+                    <Input defaultValue={user?.agency?.name || 'My Agency'} />
                   </div>
                   <div>
                     <label className="text-sm font-medium">Website</label>
@@ -224,7 +303,7 @@ export default function SettingsPage() {
                         Get notified when you receive new reviews
                       </p>
                     </div>
-                    <input type="checkbox" defaultChecked className="h-4 w-4" />
+                    <input type="checkbox" defaultChecked className="h-4 w-4 rounded" />
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
@@ -233,7 +312,7 @@ export default function SettingsPage() {
                         Instant alerts for reviews under 3 stars
                       </p>
                     </div>
-                    <input type="checkbox" defaultChecked className="h-4 w-4" />
+                    <input type="checkbox" defaultChecked className="h-4 w-4 rounded" />
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
@@ -242,7 +321,7 @@ export default function SettingsPage() {
                         Get notified when campaigns finish
                       </p>
                     </div>
-                    <input type="checkbox" defaultChecked className="h-4 w-4" />
+                    <input type="checkbox" defaultChecked className="h-4 w-4 rounded" />
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
@@ -251,7 +330,7 @@ export default function SettingsPage() {
                         Receive weekly performance summaries
                       </p>
                     </div>
-                    <input type="checkbox" className="h-4 w-4" />
+                    <input type="checkbox" className="h-4 w-4 rounded" />
                   </div>
                   <Button>Save Preferences</Button>
                 </CardContent>
@@ -308,15 +387,52 @@ export default function SettingsPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div>
+                  <form onSubmit={handleChangePassword}>
                     <h3 className="mb-2 font-medium">Change Password</h3>
+                    {passwordError && (
+                      <div className="mb-3 rounded-md bg-red-50 p-3 text-sm text-red-600">
+                        {passwordError}
+                      </div>
+                    )}
+                    {passwordSuccess && (
+                      <div className="mb-3 flex items-center gap-2 rounded-md bg-green-50 p-3 text-sm text-green-600">
+                        <Check className="h-4 w-4" />
+                        Password changed successfully
+                      </div>
+                    )}
                     <div className="space-y-3">
-                      <Input type="password" placeholder="Current password" />
-                      <Input type="password" placeholder="New password" />
-                      <Input type="password" placeholder="Confirm new password" />
-                      <Button>Update Password</Button>
+                      <Input
+                        type="password"
+                        placeholder="Current password"
+                        value={passwordForm.currentPassword}
+                        onChange={(e) =>
+                          setPasswordForm({ ...passwordForm, currentPassword: e.target.value })
+                        }
+                        required
+                      />
+                      <Input
+                        type="password"
+                        placeholder="New password"
+                        value={passwordForm.newPassword}
+                        onChange={(e) =>
+                          setPasswordForm({ ...passwordForm, newPassword: e.target.value })
+                        }
+                        required
+                      />
+                      <Input
+                        type="password"
+                        placeholder="Confirm new password"
+                        value={passwordForm.confirmPassword}
+                        onChange={(e) =>
+                          setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })
+                        }
+                        required
+                      />
+                      <Button type="submit" disabled={changePasswordMutation.isPending}>
+                        {changePasswordMutation.isPending ? 'Updating...' : 'Update Password'}
+                      </Button>
                     </div>
-                  </div>
+                  </form>
 
                   <div className="border-t pt-4">
                     <h3 className="mb-2 font-medium">Two-Factor Authentication</h3>

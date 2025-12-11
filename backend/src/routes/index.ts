@@ -5,6 +5,7 @@ import customerRoutes from './customers';
 import campaignRoutes from './campaigns';
 import reviewRoutes from './reviews';
 import businessProfileRoutes from './businessProfiles';
+import directoryRoutes from './directories';
 import { businessProfileController } from '../controllers/businessProfileController';
 
 const router = Router();
@@ -27,12 +28,14 @@ router.use('/clients/:clientId/customers', customerRoutes);
 router.use('/clients/:clientId/campaigns', campaignRoutes);
 router.use('/clients/:clientId/reviews', reviewRoutes);
 router.use('/clients/:clientId/business-profiles', businessProfileRoutes);
+router.use('/clients/:clientId/directories', directoryRoutes);
 
 // Shorthand routes (uses clientId from auth context)
 router.use('/customers', customerRoutes);
 router.use('/campaigns', campaignRoutes);
 router.use('/reviews', reviewRoutes);
 router.use('/business-profiles', businessProfileRoutes);
+router.use('/directories', directoryRoutes);
 
 // Public review link redirect
 router.get('/r/:shortCode', businessProfileController.handleReviewLinkRedirect.bind(businessProfileController));

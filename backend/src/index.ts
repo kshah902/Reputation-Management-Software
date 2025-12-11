@@ -30,6 +30,16 @@ app.use((req, res, next) => {
   next();
 });
 
+// Root health check
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Reputation Management API',
+    version: '1.0.0',
+    docs: '/api/health',
+  });
+});
+
 // API routes
 app.use('/api', routes);
 

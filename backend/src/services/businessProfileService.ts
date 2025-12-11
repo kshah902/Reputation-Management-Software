@@ -3,6 +3,7 @@ import { NotFoundError, ValidationError } from '../utils/errors';
 import { googleBusinessProfileService } from '../integrations/googleBusinessProfile';
 import { generateShortCode } from '../utils/helpers';
 import { config } from '../config';
+import { PhotoType, PostType, PostStatus } from '@prisma/client';
 
 interface CreateBusinessProfileInput {
   clientId: string;
@@ -295,6 +296,321 @@ export class BusinessProfileService {
 
   getGoogleAuthUrl(state: string) {
     return googleBusinessProfileService.getAuthUrl(state);
+  }
+
+  // Photos management
+  async getPhotos(profileId: string, clientId: string) {
+    const profile = await prisma.businessProfile.findFirst({
+      where: { id: profileId, clientId },
+    });
+
+    if (!profile) {
+      throw new NotFoundError('Business Profile');
+    }
+
+    const photos = await prisma.businessPhoto.findMany({
+      where: { businessProfileId: profileId },
+      orderBy: [{ type: 'asc' }, { createdAt: 'desc' }],
+    });
+
+    // Group photos by type
+    const photosByType = photos.reduce((acc, photo) => {
+      const type = photo.type;
+      if (!acc[type]) acc[type] = [];
+      acc[type].push(photo);
+      return acc;
+    }, {} as Record<PhotoType, typeof photos>);
+
+    return {
+      photos,
+      photosByType,
+      total: photos.length,
+    };
+  }
+
+  async addPhoto(
+    profileId: string,
+    clientId: string,
+    data: { type: PhotoType; url: string; thumbnailUrl?: string; caption?: string }
+  ) {
+    const profile = await prisma.businessProfile.findFirst({
+      where: { id: profileId, clientId },
+    });
+
+    if (!profile) {
+      throw new NotFoundError('Business Profile');
+    }
+
+    // If adding logo or cover, update profile directly
+    if (data.type === 'LOGO') {
+      await prisma.businessProfile.update({
+        where: { id: profileId },
+        data: { logoUrl: data.url },
+      });
+    } else if (data.type === 'COVER') {
+      await prisma.businessProfile.update({
+        where: { id: profileId },
+        data: { coverPhotoUrl: data.url },
+      });
+    }
+
+    const photo = await prisma.businessPhoto.create({
+      data: {
+        businessProfileId: profileId,
+        type: data.type,
+        url: data.url,
+        thumbnailUrl: data.thumbnailUrl,
+        caption: data.caption,
+      },
+    });
+
+    return photo;
+  }
+
+  async updatePhoto(
+    profileId: string,
+    photoId: string,
+    clientId: string,
+    data: { type?: PhotoType; caption?: string }
+  ) {
+    const profile = await prisma.businessProfile.findFirst({
+      where: { id: profileId, clientId },
+    });
+
+    if (!profile) {
+      throw new NotFoundError('Business Profile');
+    }
+
+    const photo = await prisma.businessPhoto.findFirst({
+      where: { id: photoId, businessProfileId: profileId },
+    });
+
+    if (!photo) {
+      throw new NotFoundError('Photo');
+    }
+
+    return prisma.businessPhoto.update({
+      where: { id: photoId },
+      data,
+    });
+  }
+
+  async deletePhoto(profileId: string, photoId: string, clientId: string) {
+    const profile = await prisma.businessProfile.findFirst({
+      where: { id: profileId, clientId },
+    });
+
+    if (!profile) {
+      throw new NotFoundError('Business Profile');
+    }
+
+    const photo = await prisma.businessPhoto.findFirst({
+      where: { id: photoId, businessProfileId: profileId },
+    });
+
+    if (!photo) {
+      throw new NotFoundError('Photo');
+    }
+
+    await prisma.businessPhoto.delete({
+      where: { id: photoId },
+    });
+  }
+
+  // Posts management
+  async getPosts(profileId: string, clientId: string, status?: PostStatus) {
+    const profile = await prisma.businessProfile.findFirst({
+      where: { id: profileId, clientId },
+    });
+
+    if (!profile) {
+      throw new NotFoundError('Business Profile');
+    }
+
+    const where: any = { businessProfileId: profileId };
+    if (status) {
+      where.status = status;
+    }
+
+    const posts = await prisma.businessPost.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return posts;
+  }
+
+  async createPost(
+    profileId: string,
+    clientId: string,
+    data: {
+      type: PostType;
+      title?: string;
+      summary: string;
+      callToAction?: string;
+      callToActionUrl?: string;
+      mediaUrls?: string[];
+      eventStartDate?: string;
+      eventEndDate?: string;
+      offerCode?: string;
+      offerTerms?: string;
+      status?: PostStatus;
+    }
+  ) {
+    const profile = await prisma.businessProfile.findFirst({
+      where: { id: profileId, clientId },
+    });
+
+    if (!profile) {
+      throw new NotFoundError('Business Profile');
+    }
+
+    const post = await prisma.businessPost.create({
+      data: {
+        businessProfileId: profileId,
+        type: data.type,
+        title: data.title,
+        summary: data.summary,
+        callToAction: data.callToAction,
+        callToActionUrl: data.callToActionUrl || null,
+        mediaUrls: data.mediaUrls || [],
+        eventStartDate: data.eventStartDate ? new Date(data.eventStartDate) : null,
+        eventEndDate: data.eventEndDate ? new Date(data.eventEndDate) : null,
+        offerCode: data.offerCode,
+        offerTerms: data.offerTerms,
+        status: data.status || PostStatus.DRAFT,
+      },
+    });
+
+    return post;
+  }
+
+  async updatePost(
+    profileId: string,
+    postId: string,
+    clientId: string,
+    data: Partial<{
+      type: PostType;
+      title: string;
+      summary: string;
+      callToAction: string;
+      callToActionUrl: string;
+      mediaUrls: string[];
+      eventStartDate: string;
+      eventEndDate: string;
+      offerCode: string;
+      offerTerms: string;
+      status: PostStatus;
+    }>
+  ) {
+    const profile = await prisma.businessProfile.findFirst({
+      where: { id: profileId, clientId },
+    });
+
+    if (!profile) {
+      throw new NotFoundError('Business Profile');
+    }
+
+    const post = await prisma.businessPost.findFirst({
+      where: { id: postId, businessProfileId: profileId },
+    });
+
+    if (!post) {
+      throw new NotFoundError('Post');
+    }
+
+    const updateData: any = { ...data };
+    if (data.eventStartDate) {
+      updateData.eventStartDate = new Date(data.eventStartDate);
+    }
+    if (data.eventEndDate) {
+      updateData.eventEndDate = new Date(data.eventEndDate);
+    }
+
+    return prisma.businessPost.update({
+      where: { id: postId },
+      data: updateData,
+    });
+  }
+
+  async deletePost(profileId: string, postId: string, clientId: string) {
+    const profile = await prisma.businessProfile.findFirst({
+      where: { id: profileId, clientId },
+    });
+
+    if (!profile) {
+      throw new NotFoundError('Business Profile');
+    }
+
+    const post = await prisma.businessPost.findFirst({
+      where: { id: postId, businessProfileId: profileId },
+    });
+
+    if (!post) {
+      throw new NotFoundError('Post');
+    }
+
+    await prisma.businessPost.delete({
+      where: { id: postId },
+    });
+  }
+
+  async publishPost(profileId: string, postId: string, clientId: string) {
+    const profile = await prisma.businessProfile.findFirst({
+      where: { id: profileId, clientId },
+    });
+
+    if (!profile) {
+      throw new NotFoundError('Business Profile');
+    }
+
+    const post = await prisma.businessPost.findFirst({
+      where: { id: postId, businessProfileId: profileId },
+    });
+
+    if (!post) {
+      throw new NotFoundError('Post');
+    }
+
+    // TODO: If Google is connected, publish to Google Business Profile
+    // await googleBusinessProfileService.publishPost(profile, post);
+
+    return prisma.businessPost.update({
+      where: { id: postId },
+      data: {
+        status: PostStatus.PUBLISHED,
+        publishedAt: new Date(),
+      },
+    });
+  }
+
+  // Hours management
+  async updateHours(
+    profileId: string,
+    clientId: string,
+    data: {
+      mondayHours?: string | null;
+      tuesdayHours?: string | null;
+      wednesdayHours?: string | null;
+      thursdayHours?: string | null;
+      fridayHours?: string | null;
+      saturdayHours?: string | null;
+      sundayHours?: string | null;
+      specialHours?: any;
+    }
+  ) {
+    const profile = await prisma.businessProfile.findFirst({
+      where: { id: profileId, clientId },
+    });
+
+    if (!profile) {
+      throw new NotFoundError('Business Profile');
+    }
+
+    return prisma.businessProfile.update({
+      where: { id: profileId },
+      data,
+    });
   }
 }
 

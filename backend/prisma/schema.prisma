@@ -6,8 +6,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ============================================
@@ -178,6 +179,8 @@ model BusinessProfile {
   reviews             Review[]
   directoryListings   DirectoryListing[]
   reviewLinks         ReviewLink[]
+  mediaPhotos         BusinessPhoto[]
+  posts               BusinessPost[]
 
   @@index([clientId])
   @@index([googlePlaceId])
@@ -190,14 +193,34 @@ model DirectoryListing {
   directory           DirectoryType
   externalId          String?
   listingUrl          String?
+  claimUrl            String?
 
+  // Listing data (for comparison with master profile)
   name                String?
   address             String?
+  city                String?
+  state               String?
+  zipCode             String?
   phone               String?
   website             String?
+  email               String?
+  description         String?
+  categories          String[]  @default([])
+  hours               Json?
 
+  // Consistency tracking
+  isConsistent        Boolean   @default(false)
+  inconsistencies     Json?     // Array of field names that don't match
+
+  // Listing status
+  isClaimed           Boolean   @default(false)
+  isVerified          Boolean   @default(false)
+  listingScore        Int?      // Completeness score 0-100
+
+  // Sync info
   syncStatus          SyncStatus @default(PENDING)
   lastSyncedAt        DateTime?
+  lastCheckedAt       DateTime?
   lastError           String?
 
   isActive            Boolean   @default(true)
@@ -210,6 +233,7 @@ model DirectoryListing {
   @@unique([businessProfileId, directory])
   @@index([clientId])
   @@index([businessProfileId])
+  @@index([syncStatus])
 }
 
 model ReviewLink {
@@ -228,6 +252,67 @@ model ReviewLink {
 
   @@index([businessProfileId])
   @@index([shortUrl])
+}
+
+model BusinessPhoto {
+  id                  String    @id @default(uuid())
+  businessProfileId   String
+  googleMediaId       String?   @unique
+
+  type                PhotoType @default(ADDITIONAL)
+  url                 String
+  thumbnailUrl        String?
+  caption             String?
+
+  width               Int?
+  height              Int?
+
+  isFromGoogle        Boolean   @default(false)
+  viewCount           Int       @default(0)
+
+  uploadedAt          DateTime  @default(now())
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  businessProfile     BusinessProfile @relation(fields: [businessProfileId], references: [id], onDelete: Cascade)
+
+  @@index([businessProfileId])
+  @@index([type])
+}
+
+model BusinessPost {
+  id                  String    @id @default(uuid())
+  businessProfileId   String
+  googlePostId        String?   @unique
+
+  type                PostType  @default(STANDARD)
+  title               String?
+  summary             String
+  callToAction        String?
+  callToActionUrl     String?
+
+  mediaUrls           String[]  @default([])
+
+  eventStartDate      DateTime?
+  eventEndDate        DateTime?
+  offerCode           String?
+  offerTerms          String?
+
+  status              PostStatus @default(DRAFT)
+  publishedAt         DateTime?
+  expiresAt           DateTime?
+
+  viewCount           Int       @default(0)
+  clickCount          Int       @default(0)
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  businessProfile     BusinessProfile @relation(fields: [businessProfileId], references: [id], onDelete: Cascade)
+
+  @@index([businessProfileId])
+  @@index([status])
+  @@index([publishedAt])
 }
 
 // ============================================
@@ -618,6 +703,20 @@ enum DirectoryType {
   BBB
   YELLOWPAGES
   FOURSQUARE
+  NEXTDOOR
+  ANGIESLIST
+  THUMBTACK
+  HOMEADVISOR
+  HOTFROG
+  MANTA
+  CITYSEARCH
+  SUPERPAGES
+  DEXKNOWS
+  MAPQUEST
+  YAHOO_LOCAL
+  INSTAGRAM
+  LINKEDIN
+  TWITTER
 }
 
 enum SyncStatus {
@@ -733,4 +832,32 @@ enum AlertSeverity {
   MEDIUM
   HIGH
   CRITICAL
+}
+
+enum PhotoType {
+  LOGO
+  COVER
+  INTERIOR
+  EXTERIOR
+  PRODUCT
+  TEAM
+  FOOD_DRINK
+  MENU
+  ADDITIONAL
+}
+
+enum PostType {
+  STANDARD
+  EVENT
+  OFFER
+  PRODUCT
+  COVID_UPDATE
+}
+
+enum PostStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  EXPIRED
+  REJECTED
 }

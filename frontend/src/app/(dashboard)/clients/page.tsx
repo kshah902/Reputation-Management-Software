@@ -8,12 +8,14 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api';
-import { formatDate } from '@/lib/utils';
-import { Plus, Building2, Users, Star, Send, MoreVertical } from 'lucide-react';
+import { Plus, Building2, Users, Star, Send, Edit2, Trash2, X } from 'lucide-react';
 
 export default function ClientsPage() {
   const queryClient = useQueryClient();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [editingClient, setEditingClient] = useState<any>(null);
   const [newClient, setNewClient] = useState({ name: '', email: '', phone: '', industry: '' });
 
   const { data, isLoading } = useQuery({
@@ -30,9 +32,51 @@ export default function ClientsPage() {
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: ({ clientId, data }: { clientId: string; data: any }) =>
+      api.updateClient(clientId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      setShowEditModal(false);
+      setEditingClient(null);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (clientId: string) => api.deleteClient(clientId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      setShowDeleteConfirm(null);
+    },
+  });
+
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
     createMutation.mutate(newClient);
+  };
+
+  const handleEdit = (client: any) => {
+    setEditingClient({
+      id: client.id,
+      name: client.name,
+      email: client.email || '',
+      phone: client.phone || '',
+      industry: client.industry || '',
+    });
+    setShowEditModal(true);
+  };
+
+  const handleUpdate = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateMutation.mutate({
+      clientId: editingClient.id,
+      data: {
+        name: editingClient.name,
+        email: editingClient.email,
+        phone: editingClient.phone,
+        industry: editingClient.industry,
+      },
+    });
   };
 
   return (
@@ -72,9 +116,30 @@ export default function ClientsPage() {
                         <p className="text-sm text-gray-600">{client.email}</p>
                       </div>
                     </div>
-                    <Badge variant={client.isActive ? 'success' : 'secondary'}>
-                      {client.isActive ? 'Active' : 'Inactive'}
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => handleEdit(client)}>
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-600 hover:text-red-700"
+                        onClick={() => setShowDeleteConfirm(client.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="mt-2">
+                    <Badge variant={client.isActive !== false ? 'success' : 'secondary'}>
+                      {client.isActive !== false ? 'Active' : 'Inactive'}
                     </Badge>
+                    {client.industry && (
+                      <Badge variant="outline" className="ml-2">
+                        {client.industry}
+                      </Badge>
+                    )}
                   </div>
 
                   <div className="mt-4 grid grid-cols-3 gap-4 border-t pt-4">
@@ -100,18 +165,23 @@ export default function ClientsPage() {
                       <p className="text-xs text-gray-600">Campaigns</p>
                     </div>
                   </div>
-
-                  <div className="mt-4 flex gap-2">
-                    <Button variant="outline" size="sm" className="flex-1" asChild>
-                      <a href={`/clients/${client.id}`}>View Details</a>
-                    </Button>
-                    <Button size="sm" className="flex-1" asChild>
-                      <a href={`/clients/${client.id}/dashboard`}>Dashboard</a>
-                    </Button>
-                  </div>
                 </CardContent>
               </Card>
             ))}
+
+            {data?.clients?.length === 0 && (
+              <div className="col-span-full py-12 text-center">
+                <Building2 className="mx-auto h-12 w-12 text-gray-400" />
+                <h3 className="mt-4 text-lg font-medium">No clients yet</h3>
+                <p className="text-gray-600">
+                  Add your first client to get started
+                </p>
+                <Button className="mt-4" onClick={() => setShowCreateModal(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Client
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
@@ -120,7 +190,12 @@ export default function ClientsPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
             <Card className="w-full max-w-md">
               <CardContent className="p-6">
-                <h2 className="mb-4 text-xl font-semibold">Add New Client</h2>
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-xl font-semibold">Add New Client</h2>
+                  <Button variant="ghost" size="sm" onClick={() => setShowCreateModal(false)}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
                 <form onSubmit={handleCreate} className="space-y-4">
                   <div>
                     <label className="text-sm font-medium">Client Name</label>
@@ -171,6 +246,108 @@ export default function ClientsPage() {
                     </Button>
                   </div>
                 </form>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Edit Client Modal */}
+        {showEditModal && editingClient && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <Card className="w-full max-w-md">
+              <CardContent className="p-6">
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-xl font-semibold">Edit Client</h2>
+                  <Button variant="ghost" size="sm" onClick={() => setShowEditModal(false)}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <form onSubmit={handleUpdate} className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium">Client Name</label>
+                    <Input
+                      value={editingClient.name}
+                      onChange={(e) =>
+                        setEditingClient({ ...editingClient, name: e.target.value })
+                      }
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Email</label>
+                    <Input
+                      type="email"
+                      value={editingClient.email}
+                      onChange={(e) =>
+                        setEditingClient({ ...editingClient, email: e.target.value })
+                      }
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Phone</label>
+                    <Input
+                      value={editingClient.phone}
+                      onChange={(e) =>
+                        setEditingClient({ ...editingClient, phone: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Industry</label>
+                    <Input
+                      value={editingClient.industry}
+                      onChange={(e) =>
+                        setEditingClient({ ...editingClient, industry: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowEditModal(false)}
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                    <Button type="submit" className="flex-1" disabled={updateMutation.isPending}>
+                      {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <Card className="w-full max-w-sm">
+              <CardContent className="p-6">
+                <h2 className="mb-2 text-xl font-semibold">Delete Client</h2>
+                <p className="mb-4 text-gray-600">
+                  Are you sure you want to delete this client? This will also delete all
+                  associated customers, campaigns, and reviews. This action cannot be undone.
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowDeleteConfirm(null)}
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => deleteMutation.mutate(showDeleteConfirm)}
+                    className="flex-1"
+                    disabled={deleteMutation.isPending}
+                  >
+                    {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>

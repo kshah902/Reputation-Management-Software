@@ -13,12 +13,15 @@ import {
   BarChart3,
   Send,
   LogOut,
+  MapPin,
+  Globe,
 } from 'lucide-react';
 import { useAuth } from '@/store/auth';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Clients', href: '/clients', icon: Building2 },
+  { name: 'Locations', href: '/locations', icon: MapPin },
   { name: 'Customers', href: '/customers', icon: Users },
   { name: 'Campaigns', href: '/campaigns', icon: Send },
   { name: 'Reviews', href: '/reviews', icon: Star },

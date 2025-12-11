@@ -23,4 +23,20 @@ router.get('/:profileId/google/accounts/:accountId/locations', businessProfileCo
 router.post('/:profileId/google/select-location', businessProfileController.selectGoogleLocation.bind(businessProfileController));
 router.post('/:profileId/google/sync', businessProfileController.syncWithGoogle.bind(businessProfileController));
 
+// Photos management
+router.get('/:profileId/photos', businessProfileController.getPhotos.bind(businessProfileController));
+router.post('/:profileId/photos', businessProfileController.addPhoto.bind(businessProfileController));
+router.put('/:profileId/photos/:photoId', businessProfileController.updatePhoto.bind(businessProfileController));
+router.delete('/:profileId/photos/:photoId', businessProfileController.deletePhoto.bind(businessProfileController));
+
+// Posts management
+router.get('/:profileId/posts', businessProfileController.getPosts.bind(businessProfileController));
+router.post('/:profileId/posts', businessProfileController.createPost.bind(businessProfileController));
+router.put('/:profileId/posts/:postId', businessProfileController.updatePost.bind(businessProfileController));
+router.delete('/:profileId/posts/:postId', businessProfileController.deletePost.bind(businessProfileController));
+router.post('/:profileId/posts/:postId/publish', businessProfileController.publishPost.bind(businessProfileController));
+
+// Business hours
+router.put('/:profileId/hours', businessProfileController.updateHours.bind(businessProfileController));
+
 export default router;

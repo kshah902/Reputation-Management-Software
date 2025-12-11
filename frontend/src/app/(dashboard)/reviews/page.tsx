@@ -4,10 +4,10 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api';
-import { formatDateTime, getSentimentColor, getRatingColor } from '@/lib/utils';
+import { formatDateTime, getSentimentColor } from '@/lib/utils';
 import {
   Star,
   MessageSquare,
@@ -16,19 +16,22 @@ import {
   Flag,
   ChevronDown,
   ChevronUp,
+  X,
+  Copy,
+  Check,
 } from 'lucide-react';
+import { useClientStore } from '@/store/client';
 
 export default function ReviewsPage() {
   const queryClient = useQueryClient();
+  const { selectedClient } = useClientStore();
   const [expandedReview, setExpandedReview] = useState<string | null>(null);
   const [filter, setFilter] = useState({ needsResponse: false });
+  const [showResponseModal, setShowResponseModal] = useState<any>(null);
+  const [responseContent, setResponseContent] = useState('');
+  const [copiedSuggestion, setCopiedSuggestion] = useState<string | null>(null);
 
-  const { data: clients } = useQuery({
-    queryKey: ['clients'],
-    queryFn: () => api.getClients(),
-  });
-
-  const clientId = clients?.clients?.[0]?.id;
+  const clientId = selectedClient?.id;
 
   const { data, isLoading } = useQuery({
     queryKey: ['reviews', clientId, filter],
@@ -38,8 +41,19 @@ export default function ReviewsPage() {
 
   const generateSuggestionsMutation = useMutation({
     mutationFn: (reviewId: string) => api.generateAiSuggestions(clientId!, reviewId),
+    onSuccess: (suggestions, reviewId) => {
+      queryClient.invalidateQueries({ queryKey: ['reviews'] });
+      // If modal is open for this review, we could update suggestions there
+    },
+  });
+
+  const createResponseMutation = useMutation({
+    mutationFn: ({ reviewId, content, publish }: { reviewId: string; content: string; publish: boolean }) =>
+      api.createReviewResponse(clientId!, reviewId, content, publish),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reviews'] });
+      setShowResponseModal(null);
+      setResponseContent('');
     },
   });
 
@@ -58,6 +72,27 @@ export default function ReviewsPage() {
         ))}
       </div>
     );
+  };
+
+  const handleUseSuggestion = (content: string) => {
+    setResponseContent(content);
+    setCopiedSuggestion(content);
+    setTimeout(() => setCopiedSuggestion(null), 2000);
+  };
+
+  const handleOpenResponse = (review: any) => {
+    setShowResponseModal(review);
+    setResponseContent('');
+  };
+
+  const handleSubmitResponse = (publish: boolean) => {
+    if (showResponseModal && responseContent.trim()) {
+      createResponseMutation.mutate({
+        reviewId: showResponseModal.id,
+        content: responseContent,
+        publish,
+      });
+    }
   };
 
   return (
@@ -166,7 +201,7 @@ export default function ReviewsPage() {
                         ? 'Generating...'
                         : 'AI Suggestions'}
                     </Button>
-                    <Button size="sm">
+                    <Button size="sm" onClick={() => handleOpenResponse(review)}>
                       <Send className="mr-1 h-4 w-4" />
                       Respond
                     </Button>
@@ -207,6 +242,10 @@ export default function ReviewsPage() {
                                   size="sm"
                                   variant="ghost"
                                   className="mt-2"
+                                  onClick={() => {
+                                    handleOpenResponse(review);
+                                    setTimeout(() => handleUseSuggestion(suggestion.content), 100);
+                                  }}
                                 >
                                   Use This Response
                                 </Button>
@@ -226,9 +265,9 @@ export default function ReviewsPage() {
                             >
                               <p className="text-sm">{response.content}</p>
                               <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
-                                <span>
+                                <Badge variant={response.isPublished ? 'success' : 'secondary'}>
                                   {response.isPublished ? 'Published' : 'Draft'}
-                                </span>
+                                </Badge>
                                 {response.publishedAt && (
                                   <span>{formatDateTime(response.publishedAt)}</span>
                                 )}
@@ -254,6 +293,98 @@ export default function ReviewsPage() {
                 </CardContent>
               </Card>
             )}
+          </div>
+        )}
+
+        {/* Response Modal */}
+        {showResponseModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4">
+            <Card className="w-full max-w-2xl">
+              <CardContent className="p-6">
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-xl font-semibold">Respond to Review</h2>
+                  <Button variant="ghost" size="sm" onClick={() => setShowResponseModal(null)}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {/* Original Review */}
+                <div className="mb-4 rounded-lg border bg-gray-50 p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="font-medium">{showResponseModal.reviewerName || 'Anonymous'}</span>
+                    {renderStars(showResponseModal.rating)}
+                  </div>
+                  <p className="text-sm text-gray-700">{showResponseModal.comment}</p>
+                </div>
+
+                {/* AI Suggestions */}
+                {showResponseModal.aiSuggestions?.length > 0 && (
+                  <div className="mb-4">
+                    <h4 className="mb-2 text-sm font-medium">AI Suggestions</h4>
+                    <div className="space-y-2 max-h-40 overflow-y-auto">
+                      {showResponseModal.aiSuggestions.map((suggestion: any) => (
+                        <div
+                          key={suggestion.id}
+                          className="flex items-start justify-between rounded-lg border bg-gray-50 p-3"
+                        >
+                          <div className="flex-1">
+                            <Badge variant="outline" className="mb-1">{suggestion.tone}</Badge>
+                            <p className="text-sm line-clamp-2">{suggestion.content}</p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleUseSuggestion(suggestion.content)}
+                          >
+                            {copiedSuggestion === suggestion.content ? (
+                              <Check className="h-4 w-4 text-green-500" />
+                            ) : (
+                              <Copy className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Response Input */}
+                <div className="mb-4">
+                  <label className="text-sm font-medium">Your Response</label>
+                  <textarea
+                    className="mt-1 h-32 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-purple-500 focus:outline-none"
+                    value={responseContent}
+                    onChange={(e) => setResponseContent(e.target.value)}
+                    placeholder="Write your response here..."
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowResponseModal(null)}
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => handleSubmitResponse(false)}
+                    disabled={!responseContent.trim() || createResponseMutation.isPending}
+                    className="flex-1"
+                  >
+                    Save as Draft
+                  </Button>
+                  <Button
+                    onClick={() => handleSubmitResponse(true)}
+                    disabled={!responseContent.trim() || createResponseMutation.isPending}
+                    className="flex-1"
+                  >
+                    {createResponseMutation.isPending ? 'Publishing...' : 'Publish Response'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         )}
       </div>
